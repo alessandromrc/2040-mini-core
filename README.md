@@ -1,7 +1,10 @@
 # 2040-mini-core
 
 
-Mini Core similar to the Arduino one for the [2040](https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf) microcontroller 
+<p align="center">
+<p>Mini Core similar to the Arduino one for the 2040 microcontroller</p> 
+<img src="https://repository-images.githubusercontent.com/514100604/a0466ddc-f224-4b39-922e-ff0fae835694" width=25% height=50%>
+</p>
 
 
 ## How to build
