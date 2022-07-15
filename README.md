@@ -2,7 +2,7 @@
 
 
 <p align="center">
-<p>Mini Core similar to the Arduino one for the 2040 microcontroller</p> 
+<p>Mini Core similar to the Arduino one for the rp2040 microcontroller</p> 
 <img src="https://repository-images.githubusercontent.com/514100604/a0466ddc-f224-4b39-922e-ff0fae835694" width=25% height=50%>
 </p>
 
