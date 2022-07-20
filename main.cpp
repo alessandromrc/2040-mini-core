@@ -5,7 +5,6 @@ System system;
 USB_SERIAL usb_serial;
 Temperature temp;
 
-
 bool led_status = false;
 
 unsigned long previousMillis = 0;
@@ -19,18 +18,16 @@ Debouncing Reset(switch_reset, INPUT_PULLUP);
 
 
 void setup() {
-
   initializeADC();
   temp.Begin();
   pinMode(LED_PIN, OUTPUT);
   pinMode(16, OUTPUT);
   pinMode(26, ANALOG);
-
-
   midi.Begin(uart0, 0, 1);
 }
 
 void loop() {
+
   unsigned long currentMillis = millis();
 
   if (currentMillis - previousMillis >= interval) {
@@ -44,13 +41,19 @@ void loop() {
   midi.sendNoteOff(60, 127);
   delay(10);
 
+  /*
   usb_serial.println(analogRead(26));
 
   usb_serial.print("temperature -> ");
 
   usb_serial.print(temp.read('C'));
   usb_serial.println("C");
+  */
 
+
+  const char* character_incoming = usb_serial.getString();
+
+  usb_serial.print(character_incoming);
 }
 
 int main() {

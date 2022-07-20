@@ -4,6 +4,8 @@
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
+#include <cstring>
+
 #define AIRCR_Register (*((volatile uint32_t *)(PPB_BASE + 0x0ED0C)))
 #define HIGH true
 #define LOW false
@@ -12,6 +14,25 @@
 #define INPUT_PULLUP 3
 #define INPUT_PULLDOWN 4
 #define ANALOG 5
+
+bool doesStringContains(const char* w1, const char* w2)
+{
+    int i=0;
+    int j=0;
+
+    for(i;i < strlen(w1); i++)
+    {
+        if(w1[i] == w2[j])
+        {
+            j++;
+        }
+    }
+
+    if(strlen(w2) == j)
+        return true;
+    else
+        return false;
+}
 
 double map(double input, double input_start, double input_end, double output_start, double output_end)
 {
@@ -260,11 +281,15 @@ class Midi
 
 class USB_SERIAL
 {
+	private:
+
+	char buf[128];
+
 	public:
-		void print(const char *str)
-		{
-			printf("%s", str);
-		}
+	void print(const char *str)
+	{
+		printf("%s", str);
+	}
 
 	void print(int value)
 	{
@@ -294,6 +319,11 @@ class USB_SERIAL
 	void print(double value)
 	{
 		printf("%f", value);
+	}
+
+	void print(char c)
+	{
+		printf("%c", c);
 	}
 
 	void println(const char *str)
@@ -335,6 +365,42 @@ class USB_SERIAL
 	{
 		printf("\n");
 	}
+
+	void println(char c)
+	{
+		printf("%c\n", c);
+	}
+
+	char getChar()
+	{
+
+		char c = getchar_timeout_us(0);
+
+		if(c > 0 && c < 127)
+		{
+			return c;
+		}
+		return 0;
+	}
+
+	const char* getString()
+	{
+		char c;
+		int i = 0;
+		while((c = getChar()) != '\n' && c != '\r' && c != 0)
+		{
+			buf[i++] = c;
+		}
+		buf[i] = 0;
+		return buf;
+	}
+
+
+	void flush()
+	{
+		stdio_flush();
+	}
+
 };
 
 class Temperature
