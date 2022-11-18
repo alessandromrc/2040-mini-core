@@ -1,12 +1,15 @@
 #include <stdio.h>
+#include "pico/stdlib.h" // stdlib
+#include "hardware/irq.h" // interrupts
+#include "hardware/pwm.h" // pwm
+#include "hardware/sync.h" // wait for interrupt
 #include "hardware/resets.h"
 #include "hardware/uart.h"
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
 #include <cstring>
-
-#define AIRCR_Register (*((volatile uint32_t *)(PPB_BASE + 0x0ED0C)))
+#define AIRCR_Register (*((volatile uint32_t*)(PPB_BASE + 0x0ED0C)))
 #define HIGH true
 #define LOW false
 #define INPUT 1
@@ -15,428 +18,498 @@
 #define INPUT_PULLDOWN 4
 #define ANALOG 5
 
-bool doesStringContains(const char* w1, const char* w2)
-{
-    int i=0;
-    int j=0;
-
-    for(i;i < strlen(w1); i++)
+class String {
+    bool contains(const char* w1, const char* w2)
     {
-        if(w1[i] == w2[j])
-        {
-            j++;
-        }
-    }
+        int i = 0;
+        int j = 0;
 
-    if(strlen(w2) == j)
-        return true;
-    else
-        return false;
-}
+        for (i; i < strlen(w1); i++) {
+            if (w1[i] == w2[j]) {
+                j++;
+            }
+        }
+
+        if (strlen(w2) == j)
+            return true;
+        else
+            return false;
+    }
+};
 
 double map(double input, double input_start, double input_end, double output_start, double output_end)
 {
-	return (input - input_start) *(output_end - output_start) / (input_end - input_start) + output_start;
+    return (input - input_start) * (output_end - output_start) / (input_end - input_start) + output_start;
 }
 
 unsigned long millis()
 {
-	return (unsigned long) time_us_32() / 1000;
+    return (unsigned long)time_us_32() / 1000;
 }
 
 unsigned long micros()
 {
-	return (unsigned long) time_us_32();
+    return (unsigned long)time_us_32();
 }
 
 void delay(int time)
 {
-	sleep_ms(time);
+    sleep_ms(time);
 }
 
 void delayMicroseconds(int time)
 {
-	sleep_us(time);
+    sleep_us(time);
 }
 
 void pinMode(int pin, int mode)
 {
-	gpio_init(pin);
-	if (mode == INPUT)
-		gpio_set_dir(pin, GPIO_IN);
-	else if (mode == OUTPUT)
-		gpio_set_dir(pin, GPIO_OUT);
-	else if (mode == INPUT_PULLUP)
-	{
-		gpio_set_dir(pin, GPIO_IN);
-		gpio_set_pulls(pin, true, false);
-	}
-	else if (mode == INPUT_PULLDOWN)
-	{
-		gpio_set_dir(pin, GPIO_IN);
-		gpio_set_pulls(pin, false, true);
-	}
-	else if (mode == ANALOG)
-	{
-		adc_gpio_init(pin);
-		adc_select_input(0);
-	}
+    gpio_init(pin);
+    if (mode == INPUT)
+        gpio_set_dir(pin, GPIO_IN);
+    else if (mode == OUTPUT)
+        gpio_set_dir(pin, GPIO_OUT);
+    else if (mode == INPUT_PULLUP) {
+        gpio_set_dir(pin, GPIO_IN);
+        gpio_set_pulls(pin, true, false);
+    }
+    else if (mode == INPUT_PULLDOWN) {
+        gpio_set_dir(pin, GPIO_IN);
+        gpio_set_pulls(pin, false, true);
+    }
+    else if (mode == ANALOG) {
+        adc_gpio_init(pin);
+        adc_select_input(0);
+    }
 }
 
 void initializeADC()
 {
-	adc_init();
+    adc_init();
 }
 
 int analogReadRaw(int pin)
 {
-	if (pin == 26)
-	{
-		adc_select_input(0);
-	}
-	else if (pin == 27)
-	{
-		adc_select_input(1);
-	}
-	else if (pin == 28)
-	{
-		adc_select_input(2);
-	}
+    if (pin == 26) {
+        adc_select_input(0);
+    }
+    else if (pin == 27) {
+        adc_select_input(1);
+    }
+    else if (pin == 28) {
+        adc_select_input(2);
+    }
 
-	return adc_read();
+    return adc_read();
 }
 
 float analogReadVoltage(int pin)
 {
-	return analogReadRaw(pin) *(3.3f / (1 << 12));
+    return analogReadRaw(pin) * (3.3f / (1 << 12));
 }
 
 int analogRead(int pin)
 {
-	return (int)(map(analogReadRaw(pin), 0, 4095, 0, 1023));
+    return (int)(map(analogReadRaw(pin), 0, 4095, 0, 1023));
 }
 
 void digitalWrite(int pin, int value)
 {
-	if (value == HIGH)
-		gpio_put(pin, HIGH);
-	else if (value == LOW)
-		gpio_put(pin, LOW);
+    if (value == HIGH)
+        gpio_put(pin, HIGH);
+    else if (value == LOW)
+        gpio_put(pin, LOW);
+}
+
+void analogWrite(int pin, float value)
+{
+    gpio_put(pin, value);
 }
 
 bool digitalRead(int pin)
 {
-	return gpio_get(pin);
+    return gpio_get(pin);
 }
 
 void pinFunction(int pin, gpio_function
-	function)
+                              function)
 {
-	gpio_set_function(pin, function);
+    gpio_set_function(pin, function);
 }
 
-class System
-{
-	public:
-		void reset()
-		{
-			AIRCR_Register = 0x5FA0004;
-		}
+class System {
+public:
+    void reset()
+    {
+        AIRCR_Register = 0x5FA0004;
+    }
 };
 
-class Serial
-{
-	private:
-		uart_inst *UART_ID = 0;
-	public:
-		void Begin(uart_inst *uartID, int Baudrate, int txPin, int rxPin)
-		{
-			uart_init(uartID, Baudrate);
-			UART_ID = uartID;
-			pinFunction(txPin, GPIO_FUNC_UART);
-			pinFunction(rxPin, GPIO_FUNC_UART);
-		}
+class Serial {
+private:
+    uart_inst* UART_ID = 0;
 
-	void writeRaw(char character)
-	{
-		uart_putc_raw(UART_ID, character);
-	}
+public:
+    void Begin(uart_inst* uartID, int Baudrate, int txPin, int rxPin)
+    {
+        uart_init(uartID, Baudrate);
+        UART_ID = uartID;
+        pinFunction(txPin, GPIO_FUNC_UART);
+        pinFunction(rxPin, GPIO_FUNC_UART);
+    }
 
-	void putc(char character)
-	{
-		uart_putc(UART_ID, character);
-	}
+    void writeRaw(char character)
+    {
+        uart_putc_raw(UART_ID, character);
+    }
 
-	void writeString(const char *string)
-	{
-		uart_puts(UART_ID, string);
-	}
+    void putc(char character)
+    {
+        uart_putc(UART_ID, character);
+    }
+
+    void writeString(const char* string)
+    {
+        uart_puts(UART_ID, string);
+    }
 };
 
-class Midi
-{
-	private:
-		int baudrate = 31250;
-	Serial serial;
-	enum MidiType: uint8_t
-	{
-		InvalidType = 0x00,	///< For notifying errors
-			NoteOff = 0x80,	///< Channel Message - Note Off
-			NoteOn = 0x90,	///< Channel Message - Note On
-			AfterTouchPoly = 0xA0,	///< Channel Message - Polyphonic AfterTouch
-			ControlChange = 0xB0,	///< Channel Message - Control Change / Channel Mode
-			ProgramChange = 0xC0,	///< Channel Message - Program Change
-			AfterTouchChannel =
-			0xD0,	///< Channel Message - Channel (monophonic) AfterTouch
-			PitchBend = 0xE0,	///< Channel Message - Pitch Bend
-			SystemExclusive = 0xF0,	///< System Exclusive
-			SystemExclusiveStart = SystemExclusive,	///< System Exclusive Start
-			TimeCodeQuarterFrame =
-			0xF1,	///< System Common - MIDI Time Code Quarter Frame
-			SongPosition = 0xF2,	///< System Common - Song Position Pointer
-			SongSelect = 0xF3,	///< System Common - Song Select
-			Undefined_F4 = 0xF4,
-			Undefined_F5 = 0xF5,
-			TuneRequest = 0xF6,	///< System Common - Tune Request
-			SystemExclusiveEnd = 0xF7,	///< System Exclusive End
-			Clock = 0xF8,	///< System Real Time - Timing Clock
-			Undefined_F9 = 0xF9,
-			Tick = Undefined_F9,	///< System Real Time - Timing Tick (1 tick = 10
-			///< milliseconds)
-			Start = 0xFA,	///< System Real Time - Start
-			Continue = 0xFB,	///< System Real Time - Continue
-			Stop = 0xFC,	///< System Real Time - Stop
-			Undefined_FD = 0xFD,
-			ActiveSensing = 0xFE,	///< System Real Time - Active Sensing
-			SystemReset = 0xFF,	///< System Real Time - System Reset
-	};
-	public:
-		void Begin(uart_inst *uartID, int txPin, int rxPin)
-		{
-			serial.Begin(uart0, baudrate, 0, 1);
-		}
+class Midi {
+private:
+    int baudrate = 31250;
+    Serial serial;
+    enum MidiType : uint8_t {
+        InvalidType = 0x00, ///< For notifying errors
+        NoteOff = 0x80, ///< Channel Message - Note Off
+        NoteOn = 0x90, ///< Channel Message - Note On
+        AfterTouchPoly = 0xA0, ///< Channel Message - Polyphonic AfterTouch
+        ControlChange = 0xB0, ///< Channel Message - Control Change / Channel Mode
+        ProgramChange = 0xC0, ///< Channel Message - Program Change
+        AfterTouchChannel = 0xD0, ///< Channel Message - Channel (monophonic) AfterTouch
+        PitchBend = 0xE0, ///< Channel Message - Pitch Bend
+        SystemExclusive = 0xF0, ///< System Exclusive
+        SystemExclusiveStart = SystemExclusive, ///< System Exclusive Start
+        TimeCodeQuarterFrame = 0xF1, ///< System Common - MIDI Time Code Quarter Frame
+        SongPosition = 0xF2, ///< System Common - Song Position Pointer
+        SongSelect = 0xF3, ///< System Common - Song Select
+        Undefined_F4 = 0xF4,
+        Undefined_F5 = 0xF5,
+        TuneRequest = 0xF6, ///< System Common - Tune Request
+        SystemExclusiveEnd = 0xF7, ///< System Exclusive End
+        Clock = 0xF8, ///< System Real Time - Timing Clock
+        Undefined_F9 = 0xF9,
+        Tick = Undefined_F9, ///< System Real Time - Timing Tick (1 tick = 10
+        ///< milliseconds)
+        Start = 0xFA, ///< System Real Time - Start
+        Continue = 0xFB, ///< System Real Time - Continue
+        Stop = 0xFC, ///< System Real Time - Stop
+        Undefined_FD = 0xFD,
+        ActiveSensing = 0xFE, ///< System Real Time - Active Sensing
+        SystemReset = 0xFF, ///< System Real Time - System Reset
+    };
 
-	void sendNoteOn(int pitch, int velocity)
-	{
-		serial.writeRaw(MidiType::NoteOn);
-		serial.writeRaw(pitch);
-		serial.writeRaw(velocity);
-	}
+public:
+    void Begin(uart_inst* uartID, int txPin, int rxPin)
+    {
+        serial.Begin(uart0, baudrate, 0, 1);
+    }
 
-	void sendNoteOff(int pitch, int velocity)
-	{
-		serial.writeRaw(MidiType::NoteOff);
-		serial.writeRaw(pitch);
-		serial.writeRaw(velocity);
-	}
+    void sendNoteOn(int pitch, int velocity)
+    {
+        serial.writeRaw(MidiType::NoteOn);
+        serial.writeRaw(pitch);
+        serial.writeRaw(velocity);
+    }
 
-	void sendAftertouchPoly(int key, int touch)
-	{
-		serial.writeRaw(MidiType::AfterTouchPoly);
-		serial.writeRaw(key);
-		serial.writeRaw(touch);
-	}
+    void sendNoteOff(int pitch, int velocity)
+    {
+        serial.writeRaw(MidiType::NoteOff);
+        serial.writeRaw(pitch);
+        serial.writeRaw(velocity);
+    }
 
-	void sendControlChange(int controller, int value)
-	{
-		serial.writeRaw(MidiType::ControlChange);
-		serial.writeRaw(controller);
-		serial.writeRaw(value);
-	}
+    void sendAftertouchPoly(int key, int touch)
+    {
+        serial.writeRaw(MidiType::AfterTouchPoly);
+        serial.writeRaw(key);
+        serial.writeRaw(touch);
+    }
 
-	void patchChange(int instrument)
-	{
-		serial.writeRaw(MidiType::ControlChange);
-		serial.writeRaw(instrument);
-	}
+    void sendControlChange(int controller, int value)
+    {
+        serial.writeRaw(MidiType::ControlChange);
+        serial.writeRaw(controller);
+        serial.writeRaw(value);
+    }
 
-	void channelPressure(int pressure)
-	{
-		serial.writeRaw(MidiType::AfterTouchChannel);
-		serial.writeRaw(pressure);
-	}
+    void patchChange(int instrument)
+    {
+        serial.writeRaw(MidiType::ControlChange);
+        serial.writeRaw(instrument);
+    }
 
-	void pitchBend(int bend_lsb, int bend_msb)
-	{
-		serial.writeRaw(MidiType::PitchBend);
-		serial.writeRaw(bend_lsb);
-		serial.writeRaw(bend_msb);
-	}
+    void channelPressure(int pressure)
+    {
+        serial.writeRaw(MidiType::AfterTouchChannel);
+        serial.writeRaw(pressure);
+    }
 
-	void sendInvalidType()
-	{
-		serial.writeRaw(MidiType::InvalidType);
-	}
+    void pitchBend(int bend_lsb, int bend_msb)
+    {
+        serial.writeRaw(MidiType::PitchBend);
+        serial.writeRaw(bend_lsb);
+        serial.writeRaw(bend_msb);
+    }
 
-	void systemReset()
-	{
-		serial.writeRaw(MidiType::SystemReset);
-	}
+    void sendInvalidType()
+    {
+        serial.writeRaw(MidiType::InvalidType);
+    }
 
-	void activeSensing()
-	{
-		serial.writeRaw(MidiType::ActiveSensing);
-	}
+    void systemReset()
+    {
+        serial.writeRaw(MidiType::SystemReset);
+    }
+
+    void activeSensing()
+    {
+        serial.writeRaw(MidiType::ActiveSensing);
+    }
 };
 
-class USB_SERIAL
-{
-	private:
+class USB_SERIAL {
+private:
+    char buf[128];
 
-	char buf[128];
+public:
+    void print(const char* str)
+    {
+        printf("%s", str);
+    }
 
-	public:
-	void print(const char *str)
-	{
-		printf("%s", str);
-	}
+    void print(int value)
+    {
+        printf("%d", value);
+    }
 
-	void print(int value)
-	{
-		printf("%d", value);
-	}
+    void print(unsigned int value)
+    {
+        printf("%u", value);
+    }
 
-	void print(unsigned int value)
-	{
-		printf("%u", value);
-	}
+    void print(long value)
+    {
+        printf("%ld", value);
+    }
 
-	void print(long value)
-	{
-		printf("%ld", value);
-	}
+    void print(unsigned long value)
+    {
+        printf("%lu", value);
+    }
 
-	void print(unsigned long value)
-	{
-		printf("%lu", value);
-	}
+    void print(float value)
+    {
+        printf("%f", value);
+    }
 
-	void print(float value)
-	{
-		printf("%f", value);
-	}
+    void print(double value)
+    {
+        printf("%f", value);
+    }
 
-	void print(double value)
-	{
-		printf("%f", value);
-	}
+    void print(char c)
+    {
+        printf("%c", c);
+    }
 
-	void print(char c)
-	{
-		printf("%c", c);
-	}
+    void println(const char* str)
+    {
+        printf("%s\n", str);
+    }
 
-	void println(const char *str)
-	{
-		printf("%s\n", str);
-	}
+    void println(int value)
+    {
+        printf("%d\n", value);
+    }
 
-	void println(int value)
-	{
-		printf("%d\n", value);
-	}
+    void println(unsigned int value)
+    {
+        printf("%u\n", value);
+    }
 
-	void println(unsigned int value)
-	{
-		printf("%u\n", value);
-	}
+    void println(long value)
+    {
+        printf("%ld\n", value);
+    }
 
-	void println(long value)
-	{
-		printf("%ld\n", value);
-	}
+    void println(unsigned long value)
+    {
+        printf("%lu\n", value);
+    }
 
-	void println(unsigned long value)
-	{
-		printf("%lu\n", value);
-	}
+    void println(float value)
+    {
+        printf("%f\n", value);
+    }
 
-	void println(float value)
-	{
-		printf("%f\n", value);
-	}
+    void println(double value)
+    {
+        printf("%f\n", value);
+    }
 
-	void println(double value)
-	{
-		printf("%f\n", value);
-	}
+    void println()
+    {
+        printf("\n");
+    }
 
-	void println()
-	{
-		printf("\n");
-	}
+    void println(char c)
+    {
+        printf("%c\n", c);
+    }
 
-	void println(char c)
-	{
-		printf("%c\n", c);
-	}
+    char getChar()
+    {
+        char c = getchar_timeout_us(0);
 
-	char getChar()
-	{
+        if (c > 0 && c < 127) {
+            return c;
+        }
 
-		char c = getchar_timeout_us(0);
+        return 0;
+    }
 
-		if(c > 0 && c < 127)
-		{
-			return c;
-		}
-		return 0;
-	}
+    const char* getString()
+    {
+        char c;
+        int i = 0;
+        while ((c = getChar()) != '\n' && c != '\r' && c != 0) {
+            buf[i++] = c;
+        }
 
-	const char* getString()
-	{
-		char c;
-		int i = 0;
-		while((c = getChar()) != '\n' && c != '\r' && c != 0)
-		{
-			buf[i++] = c;
-		}
-		buf[i] = 0;
-		return buf;
-	}
+        buf[i] = 0;
+        return buf;
+    }
 
-
-	void flush()
-	{
-		stdio_flush();
-	}
-
+    void flush()
+    {
+        stdio_flush();
+    }
 };
 
-class Temperature
-{
-	private:
+class Temperature {
+private:
+    float read_onboard_temperature(const char unit)
+    {
+        /*12-bit conversion, assume max value == ADC_VREF == 3.3 V */
+        const float conversionFactor = 3.3f / (1 << 12);
 
-		float read_onboard_temperature(const char unit)
-		{
-			/*12-bit conversion, assume max value == ADC_VREF == 3.3 V */
-			const float conversionFactor = 3.3f / (1 << 12);
+        float adc = (float)adc_read() * conversionFactor;
+        float tempC = 27.0f - (adc - 0.706f) / 0.001721f;
 
-			float adc = (float) adc_read() *conversionFactor;
-			float tempC = 27.0f - (adc - 0.706f) / 0.001721f;
+        if (unit == 'C') {
+            return tempC;
+        }
+        else if (unit == 'F') {
+            return tempC * 9 / 5 + 32;
+        }
 
-			if (unit == 'C')
-			{
-				return tempC;
-			}
-			else if (unit == 'F')
-			{
-				return tempC *9 / 5 + 32;
-			}
+        return -1.0f;
+    }
 
-			return -1.0f;
-		}
+public:
+    void Begin()
+    {
+        adc_set_temp_sensor_enabled(true);
+    }
 
-	public:
+    float read(const char unit)
+    {
+        adc_select_input(4);
+        return read_onboard_temperature(unit);
+    }
+};
 
-		void Begin()
-		{
-			adc_set_temp_sensor_enabled(true);
-		}
+class Interrupt {
+public:
+    enum states : uint32_t {
+        low = GPIO_IRQ_LEVEL_LOW, // 1
+        high = GPIO_IRQ_LEVEL_HIGH, // 2
+        edge_fall = GPIO_IRQ_EDGE_FALL, // 4
+        edge_rise = GPIO_IRQ_EDGE_RISE, // 8
+        on_change = 0xC // 12
+    };
+    void attachInterrupt(uint gpio, uint32_t mask, bool enabled, gpio_irq_callback_t callback)
+    {
+        gpio_set_irq_enabled(gpio, mask, enabled);
+        gpio_set_irq_callback(callback);
+        if (enabled)
+            irq_set_enabled(IO_IRQ_BANK0, true);
+    }
 
-	float read(const char unit)
-	{
-		adc_select_input(4);
-		return read_onboard_temperature(unit);
-	}
+    const char* getStateString(uint32_t event)
+    {
+        switch (event) {
+        case states::low:
+            return "LEVEL_LOW";
+            break;
+        case states::high:
+            return "LEVEL_HIGH";
+            break;
+        case states::edge_fall:
+            return "EDGE_FALL";
+            break;
+        case states::edge_rise:
+            return "EDGE_RISE";
+            break;
+        case states::on_change:
+            return "ON_CHANGE";
+            break;
+        default:
+            return "UNKNOWN";
+            break;
+        }
+    }
+};
+
+class Encoder {
+private:
+    Interrupt interrupt;
+    int lastMSB = 0;
+    int lastLSB = 0;
+    volatile long encoderValue = 0;
+    volatile int lastEncoded = 0;
+    uint upper_pin = 0;
+    uint lower_pin = 0;
+public:
+    int getValue()
+    {
+        return encoderValue;
+    }
+    void reset()
+    {
+        encoderValue = 0;
+    }
+    void encode(uint gpio)
+    {
+        if ((gpio == upper_pin) || (gpio == lower_pin)) {
+            int MSB = digitalRead(upper_pin);
+            int LSB = digitalRead(lower_pin);
+            int encoded = (MSB << 1) | LSB;
+            int sum = (lastEncoded << 2) | encoded;
+            if (sum == 0b1000)
+                encoderValue++;
+            if (sum == 0b0010)
+                encoderValue--;
+            lastEncoded = encoded;
+        }
+    }
+    Encoder(const uint EncoderPin[], gpio_irq_callback_t callback)
+    {
+        upper_pin = EncoderPin[0];
+        lower_pin = EncoderPin[1];
+        pinMode(upper_pin, INPUT_PULLUP);
+        pinMode(lower_pin, INPUT_PULLUP);
+        interrupt.attachInterrupt(upper_pin, interrupt.states::on_change, true, callback);
+        interrupt.attachInterrupt(lower_pin, interrupt.states::on_change, true, callback);
+    }
 };
