@@ -480,6 +480,7 @@ private:
     volatile int lastEncoded = 0;
     uint upper_pin = 0;
     uint lower_pin = 0;
+    bool changed = false;
 public:
     int getValue()
     {
@@ -500,8 +501,18 @@ public:
                 encoderValue++;
             if (sum == 0b0010)
                 encoderValue--;
+            changed = true;
             lastEncoded = encoded;
         }
+    }
+        bool hasChanged()
+    {
+        if(changed)
+        {
+            changed = false;
+            return true;
+        }
+        return false;
     }
     Encoder(const uint EncoderPin[], gpio_irq_callback_t callback)
     {
@@ -512,4 +523,4 @@ public:
         interrupt.attachInterrupt(upper_pin, interrupt.states::on_change, true, callback);
         interrupt.attachInterrupt(lower_pin, interrupt.states::on_change, true, callback);
     }
-};
+}
