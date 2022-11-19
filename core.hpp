@@ -490,7 +490,7 @@ public:
     {
         encoderValue = 0;
     }
-    void encode(uint gpio)
+    void update(uint gpio)
     {
         if ((gpio == upper_pin) || (gpio == lower_pin)) {
             int MSB = digitalRead(upper_pin);
