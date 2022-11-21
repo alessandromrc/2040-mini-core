@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <cstring>
 #include "pico/stdlib.h" // stdlib
 #include "hardware/irq.h" // interrupts
 #include "hardware/pwm.h" // pwm
@@ -8,7 +9,11 @@
 #include "pico/stdlib.h"
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
-#include <cstring>
+#include "hardware/divider.h" // hardware divider
+#include "pico/multicore.h" // fifo multicore
+#include "hardware/clocks.h" // clocks
+#include "hardware/exception.h"
+
 #define AIRCR_Register (*((volatile uint32_t*)(PPB_BASE + 0x0ED0C)))
 #define HIGH true
 #define LOW false
@@ -62,7 +67,7 @@ void delayMicroseconds(int time)
     sleep_us(time);
 }
 
-void pinMode(int pin, int mode)
+void pinMode(uint pin, int mode)
 {
     gpio_init(pin);
     if (mode == INPUT)
@@ -88,7 +93,7 @@ void initializeADC()
     adc_init();
 }
 
-int analogReadRaw(int pin)
+int analogReadRaw(uint pin)
 {
     if (pin == 26) {
         adc_select_input(0);
@@ -103,17 +108,17 @@ int analogReadRaw(int pin)
     return adc_read();
 }
 
-float analogReadVoltage(int pin)
+float analogReadVoltage(uint pin)
 {
     return analogReadRaw(pin) * (3.3f / (1 << 12));
 }
 
-int analogRead(int pin)
+int analogRead(uint pin)
 {
     return (int)(map(analogReadRaw(pin), 0, 4095, 0, 1023));
 }
 
-void digitalWrite(int pin, int value)
+void digitalWrite(uint pin, int value)
 {
     if (value == HIGH)
         gpio_put(pin, HIGH);
@@ -121,18 +126,39 @@ void digitalWrite(int pin, int value)
         gpio_put(pin, LOW);
 }
 
-void analogWrite(int pin, float value)
+bool clockWrite(uint pin, uint divider)
+{
+    switch (pin) {
+    case 21:
+    case 23:
+    case 24:
+    case 26:
+        clock_gpio_init(pin, CLOCKS_CLK_GPOUT0_CTRL_AUXSRC_VALUE_CLK_SYS, divider);
+        return true;
+        break;
+    default:
+        return false;
+        break;
+    }
+}
+
+bool writeFrequency(uint pin, float frequency)
+{
+    return clockWrite(pin, (clock_get_hz(clk_sys) / frequency));
+}
+
+
+void analogWrite(uint pin, float value)
 {
     gpio_put(pin, value);
 }
 
-bool digitalRead(int pin)
+bool digitalRead(uint pin)
 {
     return gpio_get(pin);
 }
 
-void pinFunction(int pin, gpio_function
-                              function)
+void pinFunction(uint pin, gpio_function function)
 {
     gpio_set_function(pin, function);
 }
@@ -143,6 +169,108 @@ public:
     {
         AIRCR_Register = 0x5FA0004;
     }
+
+    int32_t divide(int32_t a, int32_t b)
+    {
+        if (a == 0 || b == 0)
+            return -1;
+        hw_divider_state_t state;
+        hw_divider_divmod_s32_start(a, b);
+        hw_divider_save_state(&state);
+        hw_divider_restore_state(&state);
+        return hw_divider_s32_quotient_wait();
+    }
+
+    int32_t multiply(int32_t a, int32_t b)
+    {
+        asm("mul %0, %1"
+            : "+l"(a)
+            : "l"(b)
+            :);
+        return a;
+    }
+
+    int32_t add(int32_t a, int32_t b)
+    {
+        asm("add %0, %1"
+            : "+l"(a)
+            : "l"(b)
+            :);
+        return a;
+    }
+
+    int32_t subtract(int32_t a, int32_t b)
+    {
+        asm("sub %0, %1"
+            : "+l"(a)
+            : "l"(b)
+            :);
+        return a;
+    }
+
+    int32_t logic_shift_right(int32_t a, int32_t b)
+    {
+        asm(
+            "LSR %0, %0, %1"
+            : "+l"(a)
+            : "l"(b)
+            :);
+        return a;
+    }
+
+    int32_t logic_shift_left(int32_t a, int32_t b)
+    {
+        asm(
+            "LSL %0, %0, %1"
+            : "+l"(a)
+            : "l"(b)
+            :);
+        return a;
+    }
+
+    int32_t arithmetic_shift_right(int32_t a, int32_t b)
+    {
+        asm(
+            "ASR %0, %0, %1"
+            : "+l"(a)
+            : "l"(b)
+            :);
+        return a;
+    }
+
+    int32_t rotate_right(int32_t a, int32_t b)
+    {
+        asm(
+            "ROR %0, %0, %1"
+            : "+l"(a)
+            : "l"(b)
+            :);
+        return a;
+    }
+
+    void nop()
+    {
+        asm("MOV R0, R0"
+        :);
+    }
+
+    int32_t abs(int32_t a)
+    {
+        if(a < 0) return -a;
+
+        return a;
+    }
+
+    uint8_t chip_version()
+    {
+        return rp2040_chip_version();
+    }
+
+    uint8_t rom_version()
+    {
+        return rp2040_rom_version();
+    }
+
 };
 
 class Serial {
@@ -172,11 +300,15 @@ public:
     {
         uart_puts(UART_ID, string);
     }
+
+    uart_inst* getUartID()
+    {
+        return UART_ID;
+    }
 };
 
 class Midi {
 private:
-    int baudrate = 31250;
     Serial serial;
     enum MidiType : uint8_t {
         InvalidType = 0x00, ///< For notifying errors
@@ -211,7 +343,7 @@ private:
 public:
     void Begin(uart_inst* uartID, int txPin, int rxPin)
     {
-        serial.Begin(uart0, baudrate, 0, 1);
+        serial.Begin(uartID, 31250, txPin, rxPin);
     }
 
     void sendNoteOn(int pitch, int velocity)
@@ -442,8 +574,7 @@ public:
     {
         gpio_set_irq_enabled(gpio, mask, enabled);
         gpio_set_irq_callback(callback);
-        if (enabled)
-            irq_set_enabled(IO_IRQ_BANK0, true);
+        irq_set_enabled(IO_IRQ_BANK0, enabled);
     }
 
     const char* getStateString(uint32_t event)
@@ -481,6 +612,7 @@ private:
     uint upper_pin = 0;
     uint lower_pin = 0;
     bool changed = false;
+
 public:
     int getValue()
     {
@@ -505,10 +637,9 @@ public:
             lastEncoded = encoded;
         }
     }
-        bool hasChanged()
+    bool hasChanged()
     {
-        if(changed)
-        {
+        if (changed) {
             changed = false;
             return true;
         }
@@ -523,4 +654,92 @@ public:
         interrupt.attachInterrupt(upper_pin, interrupt.states::on_change, true, callback);
         interrupt.attachInterrupt(lower_pin, interrupt.states::on_change, true, callback);
     }
-}
+};
+
+class Core {
+private:
+    static void core1_entry()
+    {
+        while (1) {
+            int32_t (*func)(int32_t) = (int32_t (*)(int32_t))multicore_fifo_pop_blocking();
+            int32_t p = (int32_t)multicore_fifo_pop_blocking();
+            int32_t result = (*func)(p);
+            multicore_fifo_push_blocking(result);
+        }
+    }
+
+public:
+    void sync_push(uint32_t data)
+    {
+        multicore_fifo_push_blocking(data);
+    }
+
+    bool async_push(uint32_t data) // return true if data got sent as the core was free otherwise return false!
+    {
+        if (multicore_fifo_wready()) {
+            multicore_fifo_push_blocking(data);
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+
+    bool pushTimeout(uint32_t data, uint64_t timeout_us)
+    {
+        return multicore_fifo_push_timeout_us(data, timeout_us);
+    }
+
+    uint32_t sync_pop()
+    {
+        return multicore_fifo_pop_blocking();
+    }
+
+    uint32_t async_pop()
+    {
+        if (multicore_fifo_rvalid()) {
+            return multicore_fifo_pop_blocking();
+        }
+    }
+
+    void nop_tight_loop()
+    {
+        tight_loop_contents();
+    }
+
+    void launch()
+    {
+        multicore_launch_core1(core1_entry);
+    }
+
+    void launch_task(void (*task)(void))
+    {
+        multicore_launch_core1(task);
+    }
+};
+
+class Exception {
+    private:
+
+    public:
+
+    uint get_current_exception()
+    {
+        return __get_current_exception();
+    }
+
+    exception_handler_t get_vtable_handler(enum exception_number num)
+    {
+        return exception_get_vtable_handler(num);
+    }
+
+    void restore_handler(enum exception_number num, exception_handler_t original_handler)
+    {
+        exception_restore_handler(num, original_handler);
+    }
+
+    void set_exclusive_handler(enum exception_number num, exception_handler_t handler)
+    {
+        exception_set_exclusive_handler(num, handler);
+    }
+};
