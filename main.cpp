@@ -1,11 +1,4 @@
-#include "debouncing.hpp"
-
-Midi midi;
-System system;
-USB_SERIAL usb_serial;
-Temperature temp;
-Core core;
-Interrupt interrupt;
+#include "core.hpp"
 
 bool led_status = false;
 
@@ -13,10 +6,6 @@ unsigned long previousMillis = 0;
 unsigned long interval = 50;
 
 const uint LED_PIN = PICO_DEFAULT_LED_PIN;
-const uint switch_reset = 2;
-
-Debouncing Reset(switch_reset, INPUT_PULLUP);
-
 
 void loop1() {
     while(true)
@@ -56,26 +45,10 @@ void setup()
 }
 
 
-
-
-
-
 void loop()
 {
-    /*
-    unsigned long currentMillis = millis();
 
-    if (currentMillis - previousMillis >= interval) {
-        led_status = !led_status;
-        digitalWrite(LED_PIN, led_status);
-        previousMillis = currentMillis;
-    }
-    */
-    //usb_serial.println(clock_get_hz(clk_sys));
-
-    writeFrequency(21, system.abs(encoder.getValue()));
-
-    usb_serial.println(system.abs(encoder.getValue()));
+    writeFrequency(21, math.abs(encoder.getValue()));
 }
 
 int main()
@@ -83,10 +56,15 @@ int main()
     stdio_init_all();
     setup();
     while (true) {
+        try {
         if (Reset.press()) {
-            system.reset();
+            sys.reset();
         }
         loop();
+        } catch(exception_handler_t handler)
+        {
+            usb_serial.println(exception.get_current_exception());
+        }
         tight_loop_contents();
     }
     return 0;
