@@ -660,7 +660,9 @@ public:
 
   void launch() { multicore_launch_core1(core1_entry); }
 
-  void launch_task(void (*task)(void)) { multicore_launch_core1(task); }
+  template <typename F> void launch_task(F function) {
+    multicore_launch_core1(function);
+  }
 };
 
 class Exception {
