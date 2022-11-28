@@ -34,6 +34,7 @@ target_link_libraries(${PROJECT_NAME}
     hardware_clocks
     hardware_pwm
     hardware_exception
+    hardware_rtc
     pico_multicore
 )
 

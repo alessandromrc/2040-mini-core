@@ -17,6 +17,8 @@
 #include "hardware/watchdog.h"  // watchdog
 #include "pico/bootrom.h"       // bootrom
 #include "hardware/dma.h"       // DMA
+#include "hardware/rtc.h"       // RTC
+#include "pico/util/datetime.h" // Datetime utils
 
 #define AIRCR_Register (*((volatile uint32_t *)(PPB_BASE + 0x0ED0C)))
 #define HIGH true
@@ -904,6 +906,95 @@ public:
   template <typename T> STATIC void write(T CONST &value) { puts(value); }
 };
 
+class RTC {
+private:
+  datetime_t t;
+  datetime_t alr;
+  char datetime_buf[256];
+public:
+  STATIC void Begin() { rtc_init(); }
+
+  void setDateTime(int16_t year, int8_t month, int8_t day, int8_t dotw,
+                   int8_t hour, int8_t min, int8_t sec) {
+    t = {.year = year,
+         .month = month,
+         .day = day,
+         .dotw = dotw,
+         .hour = hour,
+         .min = min,
+         .sec = sec};
+    rtc_set_datetime(&t);
+  }
+
+  datetime_t getDateTime() {
+    rtc_get_datetime(&t);
+    return t;
+  }
+
+  char *toString() {
+    getDateTime();
+    char *datetime_str = &datetime_buf[0];
+    datetime_to_str(datetime_buf, sizeof(datetime_buf), &t);
+    return datetime_buf;
+  }
+
+  void set_alarm(int16_t year, int8_t month, int8_t day, int8_t dotw,
+                 int8_t hour, int8_t min, int8_t sec, rtc_callback_t callback) {
+    alr = {.year = year,
+           .month = month,
+           .day = day,
+           .dotw = dotw,
+           .hour = hour,
+           .min = min,
+           .sec = sec};
+    rtc_set_alarm(&alr, callback);
+  }
+
+  STATIC bool isRunning() { return rtc_running(); }
+
+  STATIC void alarm(bool toggle) {
+    if (toggle)
+      rtc_enable_alarm();
+    else
+      rtc_disable_alarm();
+  }
+
+  int16_t getYear() {
+    getDateTime();
+    return t.year;
+  }
+
+  int8_t getMonth() {
+    getDateTime();
+    return t.month;
+  }
+
+  int8_t getDay() {
+    getDateTime();
+    return t.day;
+  }
+
+  int8_t getDotW() {
+    getDateTime();
+    return t.dotw;
+  }
+
+  int8_t getHour() {
+    getDateTime();
+    return t.hour;
+  }
+
+  int8_t getMin() {
+    getDateTime();
+    return t.min;
+  }
+
+  int8_t getSec() {
+    getDateTime();
+    return t.sec;
+  }
+};
+
 Midi midi;
 Sys sys;
 USB_SERIAL usb_serial;
@@ -913,6 +1004,8 @@ Interrupt interrupt;
 Exception exception;
 Math math;
 Watchdog watchdog;
+DMA dma;
+RTC rtc;
 }
 
 using namespace PICO;

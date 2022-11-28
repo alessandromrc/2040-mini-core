@@ -1,11 +1,9 @@
 const uint LED_PIN = PICO_DEFAULT_LED_PIN;
-
 const uint EncoderPin[] = {3, 4};
+
 void gpio_callback(uint gpio, uint32_t events);
 Encoder encoder(EncoderPin, gpio_callback);
-
 void gpio_callback(uint gpio, uint32_t events) { encoder.update(gpio); }
-
 void loop1();
 
 void setup() {
@@ -15,6 +13,8 @@ void setup() {
   pinMode(16, OUTPUT);
   midi.Begin(uart0, 16, 17);
   core.launch_task(loop1);
+  rtc.Begin();
+  rtc.setDateTime(2022, 11, 29, 5, 12, 1, 00);
 }
 
 void loop1() {
@@ -34,5 +34,6 @@ void loop() {
   encoder.on_change(&enc_change);
 
   writeFrequency(21, math.abs(encoder.getValue()));
-  usb_serial.println(sys.get_sdk_version());
+
+  usb_serial.println(rtc.toString());
 }
