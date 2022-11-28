@@ -1,19 +1,22 @@
-#include <stdio.h>
-#include <cstring>
-#include <math.h>
-#include "pico/stdlib.h"   // stdlib
-#include "hardware/irq.h"  // interrupts
-#include "hardware/pwm.h"  // pwm
-#include "hardware/sync.h" // wait for interrupt
-#include "hardware/resets.h"
-#include "hardware/uart.h"
-#include "pico/stdlib.h"
-#include "hardware/adc.h"
-#include "hardware/gpio.h"
-#include "hardware/divider.h" // hardware divider
-#include "pico/multicore.h"   // fifo multicore
-#include "hardware/clocks.h"  // clocks
-#include "hardware/exception.h"
+#include <stdio.h>              // standard I/O
+#include <cstring>              // C strings
+#include <math.h>               // math library
+#include "pico/stdlib.h"        // stdlib
+#include "hardware/irq.h"       // interrupts
+#include "hardware/pwm.h"       // pwm
+#include "hardware/sync.h"      // wait for interrupt
+#include "hardware/resets.h"    // resets
+#include "hardware/uart.h"      // uart
+#include "pico/stdlib.h"        // standard library
+#include "hardware/adc.h"       // adc
+#include "hardware/gpio.h"      // GPIOs
+#include "hardware/divider.h"   // hardware divider
+#include "pico/multicore.h"     // fifo multicore
+#include "hardware/clocks.h"    // clocks
+#include "hardware/exception.h" // exception
+#include "hardware/watchdog.h"  // watchdog
+#include "pico/bootrom.h"       // bootrom
+#include "hardware/dma.h"       // DMA
 
 #define AIRCR_Register (*((volatile uint32_t *)(PPB_BASE + 0x0ED0C)))
 #define HIGH true
@@ -23,6 +26,9 @@
 #define INPUT_PULLUP 3
 #define INPUT_PULLDOWN 4
 #define ANALOG 5
+
+#define STATIC static
+#define CONST const
 
 // Notes to frequency
 
@@ -115,11 +121,12 @@
 #define NOTE_CS8 4435
 #define NOTE_D8 4699
 #define NOTE_DS8 4978
+#define REST 0
 
 namespace PICO {
 
 class String {
-  bool contains(const char *w1, const char *w2) {
+  bool contains(CONST char *w1, CONST char *w2) {
     int i = 0;
     int j = 0;
 
@@ -139,7 +146,7 @@ class String {
 class Math {
 private:
 public:
-  static int32_t divide(int32_t a, int32_t b) {
+  STATIC int32_t divide(int32_t a, int32_t b) {
     if (a == 0 || b == 0)
       return -1;
     hw_divider_state_t state;
@@ -149,69 +156,69 @@ public:
     return hw_divider_s32_quotient_wait();
   }
 
-  static int32_t multiply(int32_t a, int32_t b) {
+  STATIC int32_t multiply(int32_t a, int32_t b) {
     asm("mul %0, %1" : "+l"(a) : "l"(b) :);
     return a;
   }
 
-  static int32_t add(int32_t a, int32_t b) {
+  STATIC int32_t add(int32_t a, int32_t b) {
     asm("add %0, %1" : "+l"(a) : "l"(b) :);
     return a;
   }
 
-  static int32_t subtract(int32_t a, int32_t b) {
+  STATIC int32_t subtract(int32_t a, int32_t b) {
     asm("sub %0, %1" : "+l"(a) : "l"(b) :);
     return a;
   }
 
-  static double abs(double a) {
+  STATIC double abs(double a) {
     if (a < 0)
       return -a;
 
     return a;
   }
 
-  static double max(double a, double b) {
+  STATIC double max(double a, double b) {
     if (a > b)
       return a;
     else
       return b;
   }
 
-  static double min(double a, int32_t b) {
+  STATIC double min(double a, int32_t b) {
     if (a < b)
       return a;
     else
       return b;
   }
 
-  static double floor(double a) { return (int32_t)(a - 0.5); }
+  STATIC double floor(double a) { return (int32_t)(a - 0.5); }
 
-  static double ceil(double a) { return (int32_t)(a + 0.5); }
+  STATIC double ceil(double a) { return (int32_t)(a + 0.5); }
 
-  static double round(double a) {
+  STATIC double round(double a) {
     if (a < 0.0)
       return floor(a);
     else
       return ceil(a);
   }
 
-  static int32_t logic_shift_right(int32_t a, int32_t b) {
+  STATIC int32_t logic_shift_right(int32_t a, int32_t b) {
     asm("LSR %0, %0, %1" : "+l"(a) : "l"(b) :);
     return a;
   }
 
-  static int32_t logic_shift_left(int32_t a, int32_t b) {
+  STATIC int32_t logic_shift_left(int32_t a, int32_t b) {
     asm("LSL %0, %0, %1" : "+l"(a) : "l"(b) :);
     return a;
   }
 
-  static int32_t arithmetic_shift_right(int32_t a, int32_t b) {
+  STATIC int32_t arithmetic_shift_right(int32_t a, int32_t b) {
     asm("ASR %0, %0, %1" : "+l"(a) : "l"(b) :);
     return a;
   }
 
-  static int32_t rotate_right(int32_t a, int32_t b) {
+  STATIC int32_t rotate_right(int32_t a, int32_t b) {
     asm("ROR %0, %0, %1" : "+l"(a) : "l"(b) :);
     return a;
   }
@@ -317,6 +324,8 @@ public:
   uint8_t chip_version() { return rp2040_chip_version(); }
 
   uint8_t rom_version() { return rp2040_rom_version(); }
+
+  const char *get_sdk_version() { return PICO_SDK_VERSION_STRING; }
 };
 
 class Serial {
@@ -335,7 +344,7 @@ public:
 
   void putc(char character) { uart_putc(UART_ID, character); }
 
-  void writeString(const char *string) { uart_puts(UART_ID, string); }
+  void writeString(CONST char *string) { uart_puts(UART_ID, string); }
 
   uart_inst *getUartID() { return UART_ID; }
 };
@@ -432,39 +441,39 @@ private:
   char buf[128];
 
 public:
-  static void print(const char *str) { printf("%s", str); }
+  STATIC void print(CONST char *str) { printf("%s", str); }
 
-  static void print(int value) { printf("%d", value); }
+  STATIC void print(int value) { printf("%d", value); }
 
-  static void print(unsigned int value) { printf("%u", value); }
+  STATIC void print(unsigned int value) { printf("%u", value); }
 
-  static void print(long value) { printf("%ld", value); }
+  STATIC void print(long value) { printf("%ld", value); }
 
-  static void print(unsigned long value) { printf("%lu", value); }
+  STATIC void print(unsigned long value) { printf("%lu", value); }
 
-  static void print(float value) { printf("%f", value); }
+  STATIC void print(float value) { printf("%f", value); }
 
-  static void print(double value) { printf("%f", value); }
+  STATIC void print(double value) { printf("%f", value); }
 
-  static void print(char c) { printf("%c", c); }
+  STATIC void print(char c) { printf("%c", c); }
 
-  static void println(const char *str) { printf("%s\n", str); }
+  STATIC void println(CONST char *str) { printf("%s\n", str); }
 
-  static void println(int value) { printf("%d\n", value); }
+  STATIC void println(int value) { printf("%d\n", value); }
 
-  static void println(unsigned int value) { printf("%u\n", value); }
+  STATIC void println(unsigned int value) { printf("%u\n", value); }
 
-  static void println(long value) { printf("%ld\n", value); }
+  STATIC void println(long value) { printf("%ld\n", value); }
 
-  static void println(unsigned long value) { printf("%lu\n", value); }
+  STATIC void println(unsigned long value) { printf("%lu\n", value); }
 
-  static void println(float value) { printf("%f\n", value); }
+  STATIC void println(float value) { printf("%f\n", value); }
 
-  static void println(double value) { printf("%f\n", value); }
+  STATIC void println(double value) { printf("%f\n", value); }
 
-  static void println() { printf("\n"); }
+  STATIC void println() { printf("\n"); }
 
-  static void println(char c) { printf("%c\n", c); }
+  STATIC void println(char c) { printf("%c\n", c); }
 
   char getChar() {
     char c = getchar_timeout_us(0);
@@ -476,7 +485,7 @@ public:
     return 0;
   }
 
-  const char *getString() {
+  CONST char *getString() {
     char c;
     int i = 0;
     while ((c = getChar()) != '\n' && c != '\r' && c != 0) {
@@ -492,9 +501,9 @@ public:
 
 class Temperature {
 private:
-  float read_onboard_temperature(const char unit) {
+  float read_onboard_temperature(CONST char unit) {
     /*12-bit conversion, assume max value == ADC_VREF == 3.3 V */
-    const float conversionFactor = 3.3f / (1 << 12);
+    CONST float conversionFactor = 3.3f / (1 << 12);
 
     float adc = (float)adc_read() * conversionFactor;
     float tempC = 27.0f - (adc - 0.706f) / 0.001721f;
@@ -511,7 +520,7 @@ private:
 public:
   void Begin() { adc_set_temp_sensor_enabled(true); }
 
-  float read(const char unit) {
+  float read(CONST char unit) {
     adc_select_input(4);
     return read_onboard_temperature(unit);
   }
@@ -533,7 +542,7 @@ public:
     irq_set_enabled(IO_IRQ_BANK0, enabled);
   }
 
-  const char *getStateString(uint32_t event) {
+  CONST char *getStateString(uint32_t event) {
     switch (event) {
     case states::low:
       return "LEVEL_LOW";
@@ -592,7 +601,12 @@ public:
     }
     return false;
   }
-  Encoder(const uint EncoderPin[], gpio_irq_callback_t callback) {
+  template <typename F> void on_change(F function) {
+    if (hasChanged()) {
+      function();
+    }
+  }
+  Encoder(CONST uint EncoderPin[], gpio_irq_callback_t callback) {
     upper_pin = EncoderPin[0];
     lower_pin = EncoderPin[1];
     pinMode(upper_pin, INPUT_PULLUP);
@@ -606,7 +620,7 @@ public:
 
 class Core {
 private:
-  static void core1_entry() {
+  STATIC void core1_entry() {
     while (1) {
       int32_t (*func)(int32_t) =
           (int32_t (*)(int32_t))multicore_fifo_pop_blocking();
@@ -812,15 +826,80 @@ public:
   }
 
   void play(float frequency, float duration) {
-    if (currentTime - previousTime < duration) {
-      writeFrequency(choosen_pin, frequency);
-    } else {
+
+    if (frequency == 0)
       stop();
-      previousTime = currentTime;
+    else {
+      if (currentTime - previousTime < duration) {
+        writeFrequency(choosen_pin, frequency);
+      } else {
+        stop();
+        previousTime = currentTime;
+      }
     }
   }
 
   Tone(uint pin) { choosen_pin = pin; }
+};
+
+class Watchdog {
+private:
+public:
+  void enable(uint32_t delay, bool pause_on_dbg) {
+    watchdog_enable(delay, pause_on_dbg);
+  }
+
+  void reboot(uint32_t pc, uint32_t sp, uint32_t delay_ms) {
+    watchdog_reboot(pc, sp, delay_ms);
+  }
+
+  void update() { watchdog_update(); }
+  uint32_t getCount() { return watchdog_get_count(); }
+
+  void start_tick(uint cycles) { watchdog_start_tick(cycles); }
+
+  bool caused_reboot() {
+    return watchdog_enable_caused_reboot() || watchdog_caused_reboot();
+  }
+};
+
+class DMA {
+private:
+public:
+  STATIC int claim_unused_channel(bool panic) {
+    return dma_claim_unused_channel(panic);
+  }
+
+  STATIC dma_channel_config get_default_config(uint channel) {
+    return dma_channel_get_default_config(channel);
+  }
+
+  STATIC void set_transfer_data_size(dma_channel_config *&c,
+                                     enum dma_channel_transfer_size size) {
+    channel_config_set_transfer_data_size(c, size);
+  }
+
+  STATIC void set_read_increment(dma_channel_config *&c, bool increment) {
+    channel_config_set_read_increment(c, increment);
+  }
+
+  STATIC void set_write_increment(dma_channel_config *&c, bool increment) {
+    channel_config_set_write_increment(c, increment);
+  }
+
+  STATIC void configure(uint channel, CONST dma_channel_config *&config,
+                        volatile void *&write_addr,
+                        CONST volatile void *&read_addr, uint transfer_count,
+                        bool trigger) {
+    dma_channel_configure(channel, config, write_addr, read_addr,
+                          transfer_count, trigger);
+  }
+
+  STATIC void wait_for_finish_blocking(uint channel) {
+    dma_channel_wait_for_finish_blocking(channel);
+  }
+
+  template <typename T> STATIC void write(T CONST &value) { puts(value); }
 };
 
 Midi midi;
@@ -831,10 +910,11 @@ Core core;
 Interrupt interrupt;
 Exception exception;
 Math math;
+Watchdog watchdog;
 }
 
 using namespace PICO;
 
 // boot init
-const uint switch_reset = 2;
+CONST uint switch_reset = 28;
 Debouncing Reset(switch_reset, INPUT_PULLUP);
