@@ -17,7 +17,6 @@ pico_sdk_init()
 add_executable(${PROJECT_NAME}
     main.cpp
     core.hpp
-    debouncing.hpp
 )
 
 # Create map/bin/hex/uf2 files

@@ -27,6 +27,9 @@ void loop1() {
   }
 }
 
+Note note = Notes(Notes::List::C, 8).frequency;
+
+
 void enc_change(void) { usb_serial.println(encoder.getValue()); }
 
 void loop() {
