@@ -1,7 +1,5 @@
 namespace PICO {
-
-typedef Notes Note;
-
+    
 class Notes {
 private:
     static const int octave_arr_index = 12;
