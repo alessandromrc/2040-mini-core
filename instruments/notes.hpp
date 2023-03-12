@@ -1,10 +1,9 @@
 namespace PICO {
 
-typedef float Note;
+typedef Notes Note;
 
 class Notes {
 private:
-
     static const int octave_arr_index = 12;
 
     const float zeroth_octave[octave_arr_index] = { 16.35, 17.32, 18.35, 19.45, 20.6, 21.83, 23.12, 24.5, 25.96, 27.5, 29.14, 30.87 };
@@ -22,38 +21,37 @@ private:
         if (Octave > 8 || note > 11)
             return 0;
 
-        switch(Octave)
-        {
-          case 0:
+        switch (Octave) {
+        case 0:
             return zeroth_octave[Note];
-          break;
-          case 1:
+            break;
+        case 1:
             return first_octave[Note];
-          break;
-          case 2:
+            break;
+        case 2:
             return second_octave[Note];
-          break;
-          case 3:
+            break;
+        case 3:
             return third_octave[Note];
-          break;
-          case 4:
+            break;
+        case 4:
             return fourth_octave[Note];
-          break;
-          case 5:
+            break;
+        case 5:
             return fifth_octave[Note];
-          break;
-          case 6:
+            break;
+        case 6:
             return sixth_octave[Note];
-          break;
-          case 7:
+            break;
+        case 7:
             return seventh_octave[Note];
-          break;
-          case 8:
+            break;
+        case 8:
             return eighth_octave[Note];
-          break;
-          default:
+            break;
+        default:
             return 0;
-          break;
+            break;
         }
         return 0;
     }
@@ -86,5 +84,52 @@ public:
         this->octave = octave;
         frequency = get_frequency(this->note, this->octave);
     }
+
+    const char* toString()
+    {
+        switch (note) {
+        case List::C:
+            return "C";
+            break;
+        case List::CS:
+            return "C#";
+            break;
+        case List::D:
+            return "D";
+            break;
+        case List::DS:
+            return "D#";
+            break;
+        case List::E:
+            return "E";
+            break;
+        case List::F:
+            return "F";
+            break;
+        case List::FS:
+            return "F#";
+            break;
+        case List::G:
+            return "G";
+            break;
+        case List::GS:
+            return "G#";
+            break;
+        case List::A:
+            return "A";
+            break;
+        case List::AS:
+            return "A#";
+            break;
+        case List::B:
+            return "B";
+            break;
+        default:
+            return "";
+            break;
+        }
+        return "";
+    }
 };
+typedef Notes Note;
 }
