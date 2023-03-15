@@ -70,10 +70,10 @@ public:
         B = 11
     };
 
-    // returned freqyency from all the functions here that the user can access
+    // returned frequency from all the functions here that the user can access
     float frequency
         = 0;
-    int note = 0; // note choosen by th euser
+    int note = 0; // note choosen by the user
     int octave = 0; // octave choosen by the user
 
     Notes(const int note, const int octave)
