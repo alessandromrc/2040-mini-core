@@ -917,6 +917,7 @@ Math math;
 Watchdog watchdog;
 DMA dma;
 RTC rtc;
+Serial serial;
 }
 
 using namespace PICO;
@@ -924,3 +925,4 @@ using namespace PICO;
 // boot init
 CONST uint switch_reset = 28;
 Debouncing Reset(switch_reset, INPUT_PULLUP);
+extern void loop1();
