@@ -9,16 +9,6 @@ async function Main() {
       path: process.argv[2],
       baudRate: 1200,
     }).on('error', (err) => {
-      drives.forEach(drive => {
-        driveList.push(drive.mountpoints[0].path);
-      });
-
-      if (driveList.includes('F:\\')) {
-        console.log("Board resetted!")
-      }
-      else {
-        console.log("Board not found!")
-      }
     })
   }
   else {
