@@ -1,10 +1,8 @@
 const { SerialPort } = require('serialport')
-const drivelist = require('drivelist');
 
 async function Main() {
   if (process.argv.length > 2) {
     const drives = await drivelist.list();
-    let driveList = [];
     const port = new SerialPort({
       path: process.argv[2],
       baudRate: 1200,
