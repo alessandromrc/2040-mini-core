@@ -153,7 +153,10 @@ void delay(int time) { sleep_ms(time); }
 void delayMicroseconds(int time) { sleep_us(time); }
 
 void pinMode(uint pin, int mode) {
-  gpio_init(pin);
+  if (mode != ANALOG)
+  {
+    gpio_init(pin);
+  }
   if (mode == INPUT)
     gpio_set_dir(pin, GPIO_IN);
   else if (mode == OUTPUT)
@@ -166,7 +169,6 @@ void pinMode(uint pin, int mode) {
     gpio_set_pulls(pin, false, true);
   } else if (mode == ANALOG) {
     adc_gpio_init(pin);
-    adc_select_input(0);
   }
 }
 
